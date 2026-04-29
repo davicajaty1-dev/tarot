@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Oráculo Realista - Tarot</title>
+    <style>
+        body { margin: 0; background: radial-gradient(circle, #121212, #000); color: white; font-family: 'Segoe UI', sans-serif; text-align: center; }
+        .online-indicator { position: fixed; top: 15px; right: 15px; display: flex; align-items: center; background: rgba(0,0,0,0.8); padding: 8px 15px; border-radius: 20px; font-size: 13px; border: 1px solid #333; }
+        .bola-verde { width: 8px; height: 8px; background-color: #00ff88; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 8px #00ff88; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        .container { max-width: 900px; margin: 40px auto; padding: 25px; background: rgba(255,255,255,0.02); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input, button { padding: 12px; margin: 8px; border-radius: 8px; border: 1px solid #444; outline: none; }
+        input { background: #111; color: white; width: 220px; }
+        button { background: linear-gradient(45deg, #5e17eb, #b127df); color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { transform: translateY(-2px); filter: brightness(1.2); }
+        .card { width: 100px; height: 170px; perspective: 1000px; display: inline-block; margin: 10px; }
+        .inner { width: 100%; height: 100%; transition: transform 0.8s; transform-style: preserve-3d; position: relative; }
+        .flip { transform: rotateY(180deg); }
+        .front, .back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 10px; overflow: hidden; }
+        .back { transform: rotateY(180deg); }
+        img { width: 100%; height: 100%; object-fit: cover; }
+        #resultado { margin-top: 30px; text-align: left; padding: 20px; background: rgba(0,0,0,0.6); border-radius: 12px; border-left: 5px solid #b127df; display: none; line-height: 1.5; }
+        .negativo { color: #ff4d4d; }
+        .positivo { color: #00ff88; }
+        .neutro { color: #ffcc00; }
+    </style>
+</head>
+<body onload="atualizarOnline()">
+
+    <div class="online-indicator">
+        <div class="bola-verde"></div>
+        <span id="txt-online">Cartomantes: ...</span>
+    </div>
+
+    <h2>🔮 Oráculo dos Arcanos</h2>
+
+    <div class="container">
+        <div id="login-area">
+            <input type="text" id="nome" placeholder="Seu nome">
+            <input type="date" id="nascimento">
+            <br>
+            <button onclick="entrar()">Abrir Portais</button>
+        </div>
+
+        <div id="jogo-area" style="display: none;">
+            <p id="boas-vindas"></p>
+            <input type="text" id="pergunta" placeholder="Ex: Neymar vai ganhar a copa?" style="width: 70%;">
+            <button onclick="tirarCartas()">Consultar Oráculo</button>
+        </div>
+
+        <div id="display-cartas"></div>
+        <div id="resultado"></div>
+    </div>
+
+    <audio id="som-sino" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"></audio>
+
+    <script>
+        const baralho = [
+            { n: "O Louco", img: "https://upload.wikimedia.org/wikipedia/commons/9/90/RWS_Tarot_00_Fool.jpg", significado: "imprudência e falta de rumo", vibe: -1 },
+            { n: "O Mago", img: "https://upload.wikimedia.org/wikipedia/commons/d/de/RWS_Tarot_01_Magician.jpg", significado: "poder de ação e habilidade", vibe: 1 },
+            { n: "A Sacerdotisa", img: "https://upload.wikimedia.org/wikipedia/commons/8/88/RWS_Tarot_02_High_Priestess.jpg", significado: "segredos e intuição", vibe: 0 },
+            { n: "A Imperatriz", img: "https://upload.wikimedia.org/wikipedia/commons/d/d2/RWS_Tarot_03_Empress.jpg", significado: "fertilidade e criação", vibe: 1 },
+            { n: "O Imperador", img: "https://upload.wikimedia.org/wikipedia/commons/c/c3/RWS_Tarot_04_Emperor.jpg", significado: "rigidez e controle", vibe: 0 },
+            { n: "O Hierofante", img: "https://upload.wikimedia.org/wikipedia/commons/8/8d/RWS_Tarot_05_Hierophant.jpg", significado: "dogmas e tradição", vibe: 0 },
+            { n: "Os Enamorados", img: "https://upload.wikimedia.org/wikipedia/commons/3/3a/RWS_Tarot_06_Lovers.jpg", significado: "dúvida e escolha", vibe: 0 },
+            { n: "O Carro", img: "https://upload.wikimedia.org/wikipedia/commons/9/9b/RWS_Tarot_07_Chariot.jpg", significado: "avanço e vitória", vibe: 1 },
+            { n: "A Força", img: "https://upload.wikimedia.org/wikipedia/commons/f/f2/RWS_Tarot_08_Strength.jpg", significado: "domínio dos instintos", vibe: 1 },
+            { n: "O Eremita", img: "https://upload.wikimedia.org/wikipedia/commons/4/4d/RWS_Tarot_09_Hermit.jpg", significado: "solidão e demora", vibe: -1 },
+            { n: "A Roda da Fortuna", img: "https://upload.wikimedia.org/wikipedia/commons/3/3c/RWS_Tarot_10_Wheel_of_Fortune.jpg", significado: "instabilidade e viradas", vibe: 0 },
+            { n: "A Justiça", img: "https://upload.wikimedia.org/wikipedia/commons/e/e0/RWS_Tarot_11_Justice.jpg", significado: "frieza e julgamento", vibe: 0 },
+            { n: "O Pendurado", img: "https://upload.wikimedia.org/wikipedia/commons/2/2b/RWS_Tarot_12_Hanged_Man.jpg", significado: "estagnação e sacrifício", vibe: -1 },
+            { n: "A Morte", img: "https://upload.wikimedia.org/wikipedia/commons/d/d7/RWS_Tarot_13_Death.jpg", significado: "perda e encerramento", vibe: -1 },
+            { n: "A Temperança", img: "https://upload.wikimedia.org/wikipedia/commons/f/f8/RWS_Tarot_14_Temperance.jpg", significado: "espera e equilíbrio", vibe: 1 },
+            { n: "O Diabo", img: "https://upload.wikimedia.org/wikipedia/commons/5/55/RWS_Tarot_15_Devil.jpg", significado: "obsessão e armadilhas", vibe: -1 },
+            { n: "A Torre", img: "https://upload.wikimedia.org/wikipedia/commons/5/53/RWS_Tarot_16_Tower.jpg", significado: "destruição e queda", vibe: -1 },
+            { n: "A Estrela", img: "https://upload.wikimedia.org/wikipedia/commons/d/db/RWS_Tarot_17_Star.jpg", significado: "esperança e clareza", vibe: 1 },
+            { n: "A Lua", img: "https://upload.wikimedia.org/wikipedia/commons/7/7f/RWS_Tarot_18_Moon.jpg", significado: "engano e confusão", vibe: -1 },
+            { n: "O Sol", img: "https://upload.wikimedia.org/wikipedia/commons/1/17/RWS_Tarot_19_Sun.jpg", significado: "sucesso e verdade", vibe: 1 },
+            { n: "O Julgamento", img: "https://upload.wikimedia.org/wikipedia/commons/d/dd/RWS_Tarot_20_Judgement.jpg", significado: "acerto de contas", vibe: 0 },
+            { n: "O Mundo", img: "https://upload.wikimedia.org/wikipedia/commons/f/ff/RWS_Tarot_21_World.jpg", significado: "realização completa", vibe: 1 }
+        ];
+
+        let nomeUser = "";
+
+        function atualizarOnline() {
+            const h = new Date().getHours();
+            const total = ((h * 9) % 25) + 12;
+            document.getElementById("txt-online").innerText = `${total} cartomantes online`;
+        }
+
+        function entrar() {
+            nomeUser = document.getElementById("nome").value;
+            if (!nomeUser || !document.getElementById("nascimento").value) return alert("Preencha tudo!");
+            document.getElementById("login-area").style.display = "none";
+            document.getElementById("jogo-area").style.display = "block";
+            document.getElementById("boas-vindas").innerHTML = `Conectado: <b>${nomeUser}</b>. O Oráculo ouve você.`;
+        }
+
+        function tirarCartas() {
+            let pergunta = document.getElementById("pergunta").value;
+            if (!pergunta) return alert("Diga sua dúvida.");
+
+            let perg = pergunta.toLowerCase();
+            let deckCopia = [...baralho];
+            let sorteadas = [];
+            let html = "";
+            let conclusaoHTML = "";
+
+            // DETECTOR DE "IMPOSSÍVEL" OU "GANÂNCIA"
+            // Se a pergunta for sobre ficar rico rápido ou sem data, forçamos um viés negativo
+            let ganancia = perg.includes("rico") || perg.includes("milionário") || perg.includes("loteria") || perg.includes("dinheiro") && perg.includes("quando");
+
+            for (let i = 0; i < 4; i++) {
+                let index;
+                // Se for ganancioso, aumenta chance de pegar cartas com vibe -1
+                if (ganancia && Math.random() > 0.3) {
+                    let negativas = deckCopia.filter(c => c.vibe === -1);
+                    if (negativas.length > 0) {
+                        index = deckCopia.indexOf(negativas[Math.floor(Math.random() * negativas.length)]);
+                    } else {
+                        index = Math.floor(Math.random() * deckCopia.length);
+                    }
+                } else {
+                    index = Math.floor(Math.random() * deckCopia.length);
+                }
+
+                let carta = deckCopia[index];
+                sorteadas.push(carta);
+                deckCopia.splice(index, 1);
+
+                html += `
+                    <div class="card">
+                        <div class="inner" id="card-${i}">
+                            <div class="front"><img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Card_back_06.svg"></div>
+                            <div class="back"><img src="${carta.img}"></div>
+                        </div>
+                    </div>`;
+                
+                let corClasse = carta.vibe === 1 ? "positivo" : carta.vibe === -1 ? "negativo" : "neutro";
+                conclusaoHTML += `• <span class="${corClasse}">${carta.n}</span> (${carta.significado})<br>`;
+            }
+
+            document.getElementById("display-cartas").innerHTML = html;
+            document.getElementById("resultado").style.display = "none";
+
+            for (let i = 0; i < 4; i++) {
+                setTimeout(() => { document.getElementById(`card-${i}`).classList.add('flip'); }, i * 400);
+            }
+
+            setTimeout(() => {
+                document.getElementById("som-sino").play();
+                interpretarFinal(pergunta, sorteadas, conclusaoHTML, ganancia);
+            }, 2200);
+        }
+
+        function interpretarFinal(pergunta, sorteadas, conclusaoHTML, ganancia) {
+            let p = pergunta.toLowerCase();
+            let futura = sorteadas[3];
+            let vibeTotal = sorteadas.reduce((acc, c) => acc + c.vibe, 0);
+            let leitura = "";
+
+            // RESPOSTA PARA PERGUNTAS IMPOSSÍVEIS / GANANCIOSAS
+            if (ganancia) {
+                leitura = `Você busca atalhos que o destino não traçou. A carta <b class="negativo">${futura.n}</b> no seu futuro indica que o foco no dinheiro fácil trará apenas <b class="negativo">${futura.significado}</b>. O Oráculo não vê riqueza sem esforço aqui.`;
+            } 
+            // RESPOSTA PARA PERGUNTAS DE SIM/NÃO (TIPO NEYMAR)
+            else if (vibeTotal < 0) {
+                leitura = `A resposta para sua dúvida é <b class="negativo">NÃO</b>. As forças do passado e presente somam energias pesadas, e a conclusão com <b class="negativo">${futura.n}</b> aponta para um resultado decepcionante.`;
+            } 
+            else if (vibeTotal > 1) {
+                leitura = `As chances são <b class="positivo">MUITO ALTAS</b>. O fluxo de energia é positivo e o <b class="positivo">${futura.n}</b> no seu futuro confirma que o objetivo será alcançado com sucesso.`;
+            }
+            // RESPOSTA PARA CORES
+            else if (p.includes("cor")) {
+                const cores = ["Roxo (misticismo)", "Preto (proteção)", "Cinza (neutralidade)", "Vermelho (alerta)"];
+                leitura = `Baseado na vibração da carta <b class="neutro">${futura.n}</b>, a cor indicada para hoje é <b class="neutro">${cores[Math.floor(Math.random()*cores.length)]}</b>.`;
+            }
+            // RESPOSTA NEUTRA/INCERTA
+            else {
+                leitura = `O destino está em cima do muro. Com o <b class="neutro">${futura.n}</b> à frente, o resultado depende de uma escolha que você ainda não fez. Não há um sim nem um não garantidos.`;
+            }
+
+            document.getElementById("resultado").innerHTML = `
+                <span style="color:#b127df"><b>--- CONCLUSÃO DO SORTEIO ---</b></span><br>
+                ${conclusaoHTML}<br>
+                <span style="color:#b127df"><b>--- LEITURA PROFISSIONAL ---</b></span><br>
+                <i>"${leitura}"</i>
+            `;
+            document.getElementById("resultado").style.display = "block";
+            document.getElementById("pergunta").value = "";
+        }
+    </script>
+</body>
+</html>
